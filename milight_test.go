@@ -1,0 +1,13 @@
+package milight
+
+import "testing"
+
+func TestChecksum(t *testing.T) {
+	packet := []byte{
+		0x31, 0x00, 0x00, 0x08, 0x04, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+	}
+	chksum := checksum(packet)
+	if chksum != 0x3F {
+		t.Errorf("checksum error: 0x%X\n", chksum)
+	}
+}
