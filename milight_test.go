@@ -85,9 +85,6 @@ func TestInitSession(t *testing.T) {
 }
 
 func TestSendCommand(t *testing.T) {
-	const WB1 byte = 0x98
-	const WB2 byte = 0x65
-
 	var cmd = []byte{0x31, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00}
 
 	var packet = []byte{
@@ -139,6 +136,57 @@ func TestSendCommand(t *testing.T) {
 	defer m.Close()
 
 	err = m.sendCommand(cmd)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+}
+
+func TestKeepAlive(t *testing.T) {
+	var cmd = []byte{0xD0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}
+
+	var res = []byte{0xD8, 0x00, 0x00, 0x00, 0x07, 0xF0, 0xFE, 0x6B, 0xC2, 0x7F, 0x8A, 0x01}
+
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer pc.Close()
+
+	go func() {
+		buffer := make([]byte, 1024)
+		n, addr, err := pc.ReadFrom(buffer)
+		if err != nil {
+			t.Fatalf("err: %s", err)
+		}
+		if !bytes.Equal(cmd, buffer[:n]) {
+			t.Fatalf("expected %v, got %v", cmd, buffer[:n])
+		}
+		n, err = pc.WriteTo(res, addr)
+		if err != nil {
+			t.Fatalf("err: %s", err)
+		}
+		if n == 0 {
+			t.Fatalf("write 0 bytes")
+		}
+	}()
+
+	host, port, err := net.SplitHostPort(pc.LocalAddr().String())
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	iPort, err := strconv.Atoi(port)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	m, err := NewMilight(host, iPort)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Close()
+
+	err = m.KeepAlive()
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
