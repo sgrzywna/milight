@@ -2,6 +2,7 @@
 package milight
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"time"
@@ -37,12 +38,23 @@ const (
 
 	defaultKeepAlivePeriod time.Duration = 5 * time.Second
 
+	defaultReadDeadline time.Duration = 1 * time.Second
+
 	maxBrightnessLevel byte = 0x64
+
+	createSessionResponseLength int = 22
 )
 
 var (
 	// ErrResponseTooShort is returned when Mi-Light device responds with message too short.
 	ErrResponseTooShort = fmt.Errorf("response too short")
+	// ErrInvalidResponse is returned when Mi-Light device responds with invalid response.
+	ErrInvalidResponse = fmt.Errorf("invalid response")
+)
+
+var (
+	// commandResponse is a template of command response received from Mi-Light device.
+	commandResponse = []byte{0x88, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00}
 )
 
 // Milight represent Mi-Light controller.
@@ -65,7 +77,7 @@ func NewMilight(addr string, port int) (*Milight, error) {
 	return &Milight{
 		conn: conn,
 		zone: defaultZone,
-		quit: make(chan bool, 1),
+		quit: make(chan bool),
 	}, nil
 }
 
@@ -143,12 +155,12 @@ func (m *Milight) createSession() error {
 		return err
 	}
 	buf := make([]byte, 1024)
-	m.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	m.conn.SetReadDeadline(time.Now().Add(defaultReadDeadline))
 	n, err := m.conn.Read(buf)
 	if err != nil {
 		return err
 	}
-	if n != 22 {
+	if n != createSessionResponseLength {
 		return ErrResponseTooShort
 	}
 	m.sessionID[0] = buf[19]
@@ -172,16 +184,30 @@ func (m *Milight) keepAliveLoop() {
 	}
 }
 
-// sendCommand send command to the Mi-Light device.
+// sendCommand sends command to the Mi-Light device.
 func (m *Milight) sendCommand(cmd []byte) error {
 	m.lastActivity = time.Now()
-	packet := []byte{0x80, 0x00, 0x00, 0x00, 0x11, m.sessionID[0], m.sessionID[1], 0x00, m.getSeqNum(), 0x00}
+	seq := m.getSeqNum()
+	packet := []byte{0x80, 0x00, 0x00, 0x00, 0x11, m.sessionID[0], m.sessionID[1], 0x00, seq, 0x00}
 	packet = append(packet, cmd...)
 	packet = append(packet, m.zone, 0x00)
 	packet = append(packet, checksum(packet))
 	_, err := m.conn.Write(packet)
 	if err != nil {
 		return err
+	}
+	buf := make([]byte, 1024)
+	m.conn.SetReadDeadline(time.Now().Add(defaultReadDeadline))
+	n, err := m.conn.Read(buf)
+	if err != nil {
+		return err
+	}
+	if n != len(commandResponse) {
+		return ErrResponseTooShort
+	}
+	commandResponse[6] = seq
+	if !bytes.Equal(commandResponse, buf[:n]) {
+		return ErrInvalidResponse
 	}
 	return nil
 }
