@@ -43,11 +43,11 @@ const (
 	maxBrightnessLevel byte = 0x64
 
 	createSessionResponseLength int = 22
+
+	keepAliveResponseLength int = 12
 )
 
 var (
-	// ErrResponseTooShort is returned when Mi-Light device responds with message too short.
-	ErrResponseTooShort = fmt.Errorf("response too short")
 	// ErrInvalidResponse is returned when Mi-Light device responds with invalid response.
 	ErrInvalidResponse = fmt.Errorf("invalid response")
 )
@@ -139,6 +139,15 @@ func (m *Milight) KeepAlive() error {
 	if err != nil {
 		return err
 	}
+	buf := make([]byte, 1024)
+	m.conn.SetReadDeadline(time.Now().Add(defaultReadDeadline))
+	n, err := m.conn.Read(buf)
+	if err != nil {
+		return err
+	}
+	if n != keepAliveResponseLength {
+		return ErrInvalidResponse
+	}
 	return nil
 }
 
@@ -161,7 +170,7 @@ func (m *Milight) createSession() error {
 		return err
 	}
 	if n != createSessionResponseLength {
-		return ErrResponseTooShort
+		return ErrInvalidResponse
 	}
 	m.sessionID[0] = buf[19]
 	m.sessionID[1] = buf[20]
@@ -203,7 +212,7 @@ func (m *Milight) sendCommand(cmd []byte) error {
 		return err
 	}
 	if n != len(commandResponse) {
-		return ErrResponseTooShort
+		return ErrInvalidResponse
 	}
 	commandResponse[6] = seq
 	if !bytes.Equal(commandResponse, buf[:n]) {
