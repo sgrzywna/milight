@@ -52,11 +52,6 @@ var (
 	ErrInvalidResponse = fmt.Errorf("invalid response")
 )
 
-var (
-	// commandResponse is a template of command response received from Mi-Light device.
-	commandResponse = []byte{0x88, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00}
-)
-
 // Milight represent Mi-Light controller.
 type Milight struct {
 	conn         net.Conn
@@ -211,10 +206,10 @@ func (m *Milight) sendCommand(cmd []byte) error {
 	if err != nil {
 		return err
 	}
+	commandResponse := []byte{0x88, 0x00, 0x00, 0x00, 0x03, 0x00, seq, 0x00}
 	if n != len(commandResponse) {
 		return ErrInvalidResponse
 	}
-	commandResponse[6] = seq
 	if !bytes.Equal(commandResponse, buf[:n]) {
 		return ErrInvalidResponse
 	}
