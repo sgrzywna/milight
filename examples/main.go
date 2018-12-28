@@ -27,12 +27,6 @@ func main() {
 	}
 	defer m.Close()
 
-	err = m.InitSession()
-	if err != nil {
-		fmt.Printf("milight session error: %s\n", err)
-		os.Exit(1)
-	}
-
 	err = m.On()
 	if err != nil {
 		fmt.Printf("milight on error: %s\n", err)
